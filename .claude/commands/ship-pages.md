@@ -25,7 +25,7 @@ Work through the steps in order. Stop at the first step that fails and say what 
 
 - First word: `owner/repo` or a URL like `https://github.com/owner/repo(.git)`. Strip a trailing `.git` and `/`. Keep the exact capitalisation, because the Pages URL is case-sensitive.
 - Optional `branch=NAME` (default `main`).
-- Optional `--dry-run`: do steps 1, 2 and 3 for real (they only read), then print what steps 4 to 10 would do and stop. Change nothing.
+- Optional `--dry-run`: do steps 1, 2 and 3 as read-only, then print what steps 4 to 10 would do and stop. Change nothing in the repo: in step 3 run the scanner from a temporary copy outside the repo, and do not write `scripts/secret-scan.py`, edit `.gitignore` or `.secret-scan-allow`, commit or push. Only report what you would add.
 - If no repo is given, ask the user for it and stop.
 
 Call them OWNER, REPO and BRANCH below.
@@ -46,7 +46,7 @@ Call them OWNER, REPO and BRANCH below.
    - Exit 0: clean. Continue.
    - Exit 1: secrets found. Stop. List each finding (rule, file, line, masked). Tell the user to remove the value, rotate the credential and, if it is in history, purge it (for example with `git filter-repo`) before running this command again. Do not continue.
    - Exit 2: personal data needs a decision (emails, phone numbers, private IPs, internal hostnames). Show each finding and ask the user, for each, whether it is meant to be public. For each one they confirm, append a line `rule:path` to `.secret-scan-allow` (create it with a header comment if missing). Then run the scan again. Anything not confirmed means stop.
-4. Check visibility: `gh repo view OWNER/REPO --json visibility,isPrivate`. If the repo is public (or does not exist yet), say plainly: everything pushed is world-readable and stays in history forever.
+4. Check visibility with the REST API, because `gh repo view` and `gh repo edit` use GraphQL, which Claude Code cloud sessions block: `gh api repos/OWNER/REPO --jq '{visibility, private, description, homepage, has_pages}'`. If the repo is public (or does not exist yet), say plainly: everything pushed is world-readable and stays in history forever.
 5. Report "No sensitive data found" only when the scan exited 0.
 
 ## 4. Remote
@@ -79,7 +79,10 @@ Create or update these files from the templates below. Use the project's real co
 
 Set the repo description, homepage (the Pages URL from step 7) and topics, and update them in place if they already exist:
 
-`gh repo edit OWNER/REPO --description "DESCRIPTION" --homepage "https://OWNER.github.io/REPO/" --add-topic TOPIC`
+`gh api -X PATCH repos/OWNER/REPO -f description="DESCRIPTION" -f homepage="https://OWNER.github.io/REPO/"`
+`gh api -X PUT repos/OWNER/REPO/topics -f "names[]=TOPIC1" -f "names[]=TOPIC2"` (this replaces the topic list, so read the current topics first with `gh api repos/OWNER/REPO/topics --jq .names` and keep any that are already there)
+
+Use `gh repo edit` instead only when running on a machine where GraphQL works.
 
 - DESCRIPTION: one sentence, under 120 characters, taken from the README title and summary.
 - Topics: 3 to 6 lowercase topics that fit the project (for a single-page static app: `html`, `css`, `javascript`, `github-pages`, plus subject topics like `kanban`).
@@ -89,7 +92,7 @@ Set the repo description, homepage (the Pages URL from step 7) and topics, and u
 
 - If `gh` can read runs: `gh run list --repo OWNER/REPO --workflow pages.yml --limit 1`, then `gh run watch` on it. Report the result and, if it failed, the failing job and the reason.
 - Otherwise poll `curl -sI https://OWNER.github.io/REPO/` every 20 seconds for up to 3 minutes and report the status code.
-- Confirm the About homepage equals the live URL: `gh repo view OWNER/REPO --json homepageUrl`.
+- Confirm the About homepage equals the live URL: `gh api repos/OWNER/REPO --jq .homepage`.
 
 ## 10. Report
 
