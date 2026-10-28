@@ -1,0 +1,15 @@
+# Secrets and credentials
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+id_rsa*
+id_ed25519*
+*.tfstate
+
+# Dependencies and OS files
+node_modules/
+.DS_Store
